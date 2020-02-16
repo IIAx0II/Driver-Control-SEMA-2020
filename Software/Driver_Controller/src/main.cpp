@@ -45,9 +45,9 @@ float Speed = 0;
 int EncoderCounter = 0;
 int EncoderAState;
 int EncoderALastState;
-int ppm = 0;     
+int ppm = 0;      
 
-#define EncoderA 6
+#define EncoderA 6 // Define arduino pins
 #define EncoderB 5
 #define EncoderClick 3
 #define HallEffect 2
@@ -56,18 +56,18 @@ int ppm = 0;
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
 
-Servo VescOutput;  // create servo object to control a servo
+Servo VescOutput;  // create servo object to control the VESC throttle
 
-unsigned long RampRateStart;
+unsigned long RampRateStart;  // Initalise the throttle ramp settings 
 unsigned long RampRateAccel;
 unsigned long RampTimer;
 int RampFactor = 5;
-bool Cruise = false;
+bool Cruise = false;  // Default cruise control to off and initalise the cruise variables
 float CruiseDefault = 25.0;
 float CruiseSpeed;
 float CruiseMin;
 float CruiseMax;
-unsigned long LastTransmition;
+unsigned long LastTransmition;  // Setup timing variables
 unsigned long LcdRefresh;
 float CalculatedMin;
 float CalculatedSec;
@@ -206,13 +206,13 @@ void setup()  // Start of setup:
 
   Serial.begin(9600);  // Begin serial communication.
   pinMode(HallEffect, INPUT);
-  attachInterrupt(digitalPinToInterrupt(HallEffect), Pulse_Event, RISING);  // Enable interruption pin 2 when going from LOW to HIGH.
+  attachInterrupt(digitalPinToInterrupt(HallEffect), Pulse_Event, RISING);  // Enable interruption pins for speed sensor and rotary encoder click
   attachInterrupt(digitalPinToInterrupt(EncoderClick), CruiseControl, RISING);
 
-  EncoderALastState = digitalRead(EncoderA);
+  EncoderALastState = digitalRead(EncoderA); // setting inital rotary encoder position
   CruiseSpeed = CruiseDefault;
 
-  RampRateStart = ((RampTimeStart*1000)/MaxPPM);
+  RampRateStart = ((RampTimeStart*1000)/MaxPPM); // calculate the ramp delay
   RampRateAccel = ((RampTimeAccel*1000)/MaxPPM);
   
   Wire.begin();
@@ -220,19 +220,19 @@ void setup()  // Start of setup:
   lcd.init();
   lcd.backlight();
 
-  delay(1000);  // We sometimes take several readings of the period to average. Since we don't have any readings
-                // stored we need a high enough value in micros() so if divided is not going to give negative values.
-                // The delay allows the micros() to be high enough for the first few cycles.
+  delay(1000);
+  /* Still need to work this out on other board
   Wire.beginTransmission(9);
-  Wire.write((byte*)&Speed, 8);              // sends x 
+  Wire.write((byte*)&Speed, 8);              
   Wire.endTransmission();    // stop transmitting
   LastTransmition = millis();
+  */
   LcdRefresh = millis();
   TimerStarted = false;
 }  // End of setup.
 
 //-----------------------------------------------------------------------------------------------------------
-void Time(){
+void Time(){  // Time calculation function for elapsed time readout on lcd
   if(TimerStarted == true){
     ElapsedTime = millis() - TimerStart;
     CalculatedMin = ElapsedTime/60000;
@@ -250,13 +250,13 @@ void LcdUpdate() {
   
   lcd.setCursor(0, 0); // Set the cursor on the first column and first row.
   lcd.print("S: ");
-  if (Speed < 10.0){
+  if (Speed < 10.0){ // Leading zero for single digit speeds
     lcd.print("0");
   }
   lcd.print(Speed);
   lcd.print("KMH");
   
-  lcd.setCursor(0, 1); /*//Set the cursor on the third column and the second row (counting starts at 0!).
+  lcd.setCursor(0, 1); /* Renable for large 20*4 LCD
   lcd.print("TIME ELAPSED: ");
   if (Minutes < 10){
     lcd.print("0");
@@ -270,6 +270,9 @@ void LcdUpdate() {
   lcd.setCursor(0,2);
   */
   lcd.print("CS: ");
+  if (CruiseSpeed < 10.0){ // Leading zero for single digit speeds
+    lcd.print("0");
+  }
   lcd.print(CruiseSpeed);
   lcd.print("KMH");
   //lcd.setCursor(0,3);
@@ -305,9 +308,7 @@ void SpeedCalc()  // Start of loop:
 {
   
   encoder();
-  // The following is going to store the two values that might change in the middle of the cycle.
-  // We are going to do math and functions with those values and they can create glitches if they change in the
-  // middle of the cycle.
+  // The following is going to store the two values that might change in the middle of the cycle
   LastTimeCycleMeasure = LastTimeWeMeasured;  // Store the LastTimeWeMeasured in a variable.
   CurrentMicros = micros();  // Store the micros() in a variable.
 
@@ -422,17 +423,17 @@ void loop()
   encoder();
   LcdUpdate();
 
-  if (digitalRead(Deadman) == HIGH && TimerStarted == false){
+  if (digitalRead(Deadman) == HIGH && TimerStarted == false){ // Start the timer
     TimerStarted = true;
     TimerStart = millis();
   }
 
-  if (digitalRead(Deadman) == LOW){
+  if (digitalRead(Deadman) == LOW){ // Force stop the VESC when deadman is let go
     ppm = 0;
     VescOutput.write(ppm);
   }
 
-  if (Speed <= 5 && digitalRead(Deadman) == HIGH && Cruise == false){
+  if (Speed <= 5 && digitalRead(Deadman) == HIGH && Cruise == false){ // Starting from stationary so slower ramp up
     
     while (Speed <= SpeedMax && digitalRead(Deadman) == HIGH)
     {
@@ -452,7 +453,7 @@ void loop()
     
   }
 
-  if (Speed <= 5 && digitalRead(Deadman) == HIGH && Cruise == true){
+  if (Speed <= 5 && digitalRead(Deadman) == HIGH && Cruise == true){ // Same as above just for cruise control
     
     while (Speed <= CruiseMax && digitalRead(Deadman) == HIGH)
     {
@@ -472,12 +473,8 @@ void loop()
     
   }
 
-  /*if(digitalRead(Deadman) == HIGH && Speed >= SpeedMin && Speed <= SpeedMax){
-    ppm = 0;
-    VescOutput.write(ppm);
-  }*/
 
-  if (Speed > 5 && digitalRead(Deadman) == HIGH && Speed <= SpeedMin && Cruise == false){
+  if (Speed > 5 && digitalRead(Deadman) == HIGH && Speed <= SpeedMin && Cruise == false){ // speed boost from speed min to max with specified ramp delay
     while (Speed <= SpeedMax && digitalRead(Deadman) == HIGH)
     {
       ppm ++;
@@ -493,7 +490,7 @@ void loop()
     VescOutput.write(ppm);
   }
 
-  if (Speed > 5 && digitalRead(Deadman) == HIGH && Cruise == true){
+  if (Speed > 5 && digitalRead(Deadman) == HIGH && Cruise == true){ // Same as above just for cruise control
     
     if (digitalRead(Deadman) == HIGH && Speed <= CruiseMin && Cruise == true){
     while (digitalRead(Deadman) == HIGH && Speed <= CruiseMax && Cruise == true)
